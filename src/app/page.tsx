@@ -44,6 +44,9 @@ export default function Home() {
   const [contactPhone, setContactPhone] = useState("");
   const [contactSubject, setContactSubject] = useState("");
   const [contactMessage, setContactMessage] = useState("");
+  const [contactWebsite, setContactWebsite] = useState("");
+  const contactStartedAtRef = useRef(Date.now());
+
   const [contactLoading, setContactLoading] = useState(false);
   const [contactSuccess, setContactSuccess] = useState("");
   const [contactError, setContactError] = useState("");
@@ -202,32 +205,65 @@ export default function Home() {
       return;
     }
 
+    if (fullName.length < 2 || fullName.length > 100) {
+      setContactError("נא להזין שם מלא תקין.");
+      return;
+    }
+
     if (!/^0\d{8,9}$/.test(phone.replace(/[-\s]/g, ""))) {
       setContactError("נא להזין מספר טלפון תקין.");
+      return;
+    }
+
+    if (message.length > 1500) {
+      setContactError("ההודעה ארוכה מדי. ניתן להזין עד 1,500 תווים.");
       return;
     }
 
     try {
       setContactLoading(true);
 
-      const { error } = await supabase
-        .from("contact_messages")
-        .insert({
-          full_name: fullName,
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName,
           phone,
           subject,
-          message: message || null,
-          status: "new",
-        });
+          message,
+          website: contactWebsite,
+          startedAt: contactStartedAtRef.current,
+        }),
+      });
 
-      if (error) {
-        throw error;
+      const result = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null;
+
+      if (!response.ok || !result?.ok) {
+        if (response.status === 429) {
+          setContactError(
+            "נשלחו מספר פניות בזמן קצר. נסו שוב בעוד כמה דקות."
+          );
+          return;
+        }
+
+        setContactError(
+          result?.error ||
+            "לא הצלחנו לשלוח את הפרטים כרגע. אפשר לנסות שוב או לפנות אלינו ב-WhatsApp."
+        );
+        return;
       }
 
       setContactName("");
       setContactPhone("");
       setContactSubject("");
       setContactMessage("");
+      setContactWebsite("");
+      contactStartedAtRef.current = Date.now();
+
       setContactSuccess(
         "הפרטים נשלחו בהצלחה. ניצור איתכם קשר בהקדם."
       );
@@ -1225,6 +1261,26 @@ export default function Home() {
                   className="space-y-5"
                   onSubmit={handleContactSubmit}
                 >
+                  <div
+                    aria-hidden="true"
+                    className="absolute -left-[9999px] h-px w-px overflow-hidden"
+                  >
+                    <label htmlFor="contact-website">
+                      אתר
+                    </label>
+                    <input
+                      id="contact-website"
+                      type="text"
+                      name="website"
+                      tabIndex={-1}
+                      autoComplete="off"
+                      value={contactWebsite}
+                      onChange={(event) =>
+                        setContactWebsite(event.target.value)
+                      }
+                    />
+                  </div>
+
                   <div className="grid gap-5 sm:grid-cols-2">
                     <label className="block">
                       <span className="mb-2 block text-sm font-medium">שם מלא</span>
@@ -1234,6 +1290,7 @@ export default function Home() {
                         onChange={(event) => setContactName(event.target.value)}
                         placeholder="השם שלכם"
                         autoComplete="name"
+                        maxLength={100}
                         required
                         disabled={contactLoading}
                         className="w-full rounded-xl border border-gray-200 bg-neutral-50 px-4 py-3.5 outline-none transition placeholder:text-gray-400 focus:border-black focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
@@ -1249,6 +1306,7 @@ export default function Home() {
                         placeholder="05X-XXXXXXX"
                         autoComplete="tel"
                         inputMode="tel"
+                        maxLength={20}
                         required
                         disabled={contactLoading}
                         className="w-full rounded-xl border border-gray-200 bg-neutral-50 px-4 py-3.5 outline-none transition placeholder:text-gray-400 focus:border-black focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
@@ -1290,6 +1348,7 @@ export default function Home() {
                       value={contactMessage}
                       onChange={(event) => setContactMessage(event.target.value)}
                       placeholder="כתבו לנו בקצרה מה אתם מחפשים..."
+                      maxLength={1500}
                       disabled={contactLoading}
                       className="w-full resize-none rounded-xl border border-gray-200 bg-neutral-50 px-4 py-3.5 outline-none transition placeholder:text-gray-400 focus:border-black focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                     />
