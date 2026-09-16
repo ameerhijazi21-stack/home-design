@@ -11,6 +11,7 @@ import {
   LockKeyhole,
   Mail,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { supabase } from "../../../lib/supabase";
@@ -18,15 +19,27 @@ import { supabase } from "../../../lib/supabase";
 export default function AdminLoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] =
+    useState("");
+  const [password, setPassword] =
+    useState("");
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
 
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
+  const [error, setError] =
+    useState("");
+  const [loading, setLoading] =
+    useState(false);
+  const [
+    checkingSession,
+    setCheckingSession,
+  ] = useState(true);
 
-  async function isAdmin(userId: string) {
+  async function isAdmin(
+    userId: string
+  ) {
     const {
       data,
       error: adminError,
@@ -37,7 +50,11 @@ export default function AdminLoginPage() {
       .maybeSingle();
 
     if (adminError) {
-      console.error("Admin check error:", adminError);
+      console.error(
+        "Admin check error:",
+        adminError
+      );
+
       return false;
     }
 
@@ -51,7 +68,8 @@ export default function AdminLoginPage() {
       try {
         const {
           data: { session },
-        } = await supabase.auth.getSession();
+        } =
+          await supabase.auth.getSession();
 
         if (!active) return;
 
@@ -60,7 +78,9 @@ export default function AdminLoginPage() {
           return;
         }
 
-        const allowed = await isAdmin(session.user.id);
+        const allowed = await isAdmin(
+          session.user.id
+        );
 
         if (!active) return;
 
@@ -73,19 +93,28 @@ export default function AdminLoginPage() {
 
         if (!active) return;
 
-        setError("לחשבון זה אין הרשאה למערכת הניהול.");
+        setError(
+          "לחשבון זה אין הרשאה למערכת הניהול."
+        );
+
         setCheckingSession(false);
       } catch (sessionError) {
-        console.error("Session check error:", sessionError);
+        console.error(
+          "Session check error:",
+          sessionError
+        );
 
         if (active) {
-          setError("אירעה שגיאה בבדיקת ההתחברות.");
+          setError(
+            "אירעה שגיאה בבדיקת ההתחברות."
+          );
+
           setCheckingSession(false);
         }
       }
     }
 
-    checkSession();
+    void checkSession();
 
     return () => {
       active = false;
@@ -93,9 +122,9 @@ export default function AdminLoginPage() {
   }, [router]);
 
   async function handleSubmit(
-    e: FormEvent<HTMLFormElement>
+    event: FormEvent<HTMLFormElement>
   ) {
-    e.preventDefault();
+    event.preventDefault();
 
     if (loading) return;
 
@@ -106,29 +135,50 @@ export default function AdminLoginPage() {
       const {
         data,
         error: signInError,
-      } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
+      } =
+        await supabase.auth.signInWithPassword(
+          {
+            email: email.trim(),
+            password,
+          }
+        );
 
-      if (signInError || !data.user) {
-        setError("האימייל או הסיסמה אינם נכונים.");
+      if (
+        signInError ||
+        !data.user
+      ) {
+        setError(
+          "האימייל או הסיסמה אינם נכונים."
+        );
+
         return;
       }
 
-      const allowed = await isAdmin(data.user.id);
+      const allowed = await isAdmin(
+        data.user.id
+      );
 
       if (!allowed) {
         await supabase.auth.signOut();
-        setError("לחשבון זה אין הרשאה למערכת הניהול.");
+
+        setError(
+          "לחשבון זה אין הרשאה למערכת הניהול."
+        );
+
         return;
       }
 
       router.replace("/admin");
       router.refresh();
     } catch (loginError) {
-      console.error("Admin login error:", loginError);
-      setError("אירעה שגיאה בהתחברות. נסה שוב.");
+      console.error(
+        "Admin login error:",
+        loginError
+      );
+
+      setError(
+        "אירעה שגיאה בהתחברות. נסה שוב."
+      );
     } finally {
       setLoading(false);
     }
@@ -142,6 +192,7 @@ export default function AdminLoginPage() {
       >
         <div className="text-center">
           <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
+
           <p className="text-sm text-gray-500">
             בודק התחברות...
           </p>
@@ -170,7 +221,8 @@ export default function AdminLoginPage() {
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-gray-500">
-            התחבר כדי לגשת למערכת הניהול.
+            התחבר כדי לגשת למערכת
+            הניהול.
           </p>
         </div>
 
@@ -199,8 +251,10 @@ export default function AdminLoginPage() {
                 autoComplete="email"
                 inputMode="email"
                 value={email}
-                onChange={(e) =>
-                  setEmail(e.target.value)
+                onChange={(event) =>
+                  setEmail(
+                    event.target.value
+                  )
                 }
                 placeholder="admin@example.com"
                 disabled={loading}
@@ -225,12 +279,18 @@ export default function AdminLoginPage() {
 
               <input
                 id="admin-password"
-                type={showPassword ? "text" : "password"}
+                type={
+                  showPassword
+                    ? "text"
+                    : "password"
+                }
                 required
                 autoComplete="current-password"
                 value={password}
-                onChange={(e) =>
-                  setPassword(e.target.value)
+                onChange={(event) =>
+                  setPassword(
+                    event.target.value
+                  )
                 }
                 placeholder="הזן סיסמה"
                 disabled={loading}
@@ -241,7 +301,8 @@ export default function AdminLoginPage() {
                 type="button"
                 onClick={() =>
                   setShowPassword(
-                    (current) => !current
+                    (current) =>
+                      !current
                   )
                 }
                 disabled={loading}
@@ -258,6 +319,15 @@ export default function AdminLoginPage() {
                   <Eye size={20} />
                 )}
               </button>
+            </div>
+
+            <div className="mt-2 text-left">
+              <Link
+                href="/admin/forgot-password"
+                className="text-sm text-gray-500 transition hover:text-black"
+              >
+                שכחתי סיסמה
+              </Link>
             </div>
           </div>
 

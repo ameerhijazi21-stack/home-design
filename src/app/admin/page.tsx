@@ -19,6 +19,8 @@ import {
   TrendingUp,
   Boxes,
   Truck,
+  Tags,
+  UserRound,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -659,6 +661,17 @@ export default function AdminDashboardPage() {
               </Link>
 
               <Link
+                href="/admin/categories"
+                className="flex w-full items-center justify-between border border-gray-200 px-4 py-4 transition hover:border-black"
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  <Tags size={17} />
+                  ניהול קטגוריות
+                </span>
+                <ArrowLeft size={17} />
+              </Link>
+
+              <Link
                 href="/admin/site-images"
                 className="flex w-full items-center justify-between border border-gray-200 px-4 py-4 transition hover:border-black"
               >
@@ -692,6 +705,17 @@ export default function AdminDashboardPage() {
                 <span className="flex items-center gap-2 font-medium">
                   <Truck size={17} />
                   ניהול משלוחים
+                </span>
+                <ArrowLeft size={17} />
+              </Link>
+
+              <Link
+                href="/admin/account"
+                className="flex w-full items-center justify-between border border-gray-200 px-4 py-4 transition hover:border-black"
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  <UserRound size={17} />
+                  חשבון מנהל
                 </span>
                 <ArrowLeft size={17} />
               </Link>

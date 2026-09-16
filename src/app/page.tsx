@@ -31,6 +31,37 @@ import {
   type Product,
 } from "../lib/products";
 
+
+type StoreCategory = {
+  id: number;
+  name: string;
+  slug: string;
+  image_url: string | null;
+  sort_order: number;
+  active: boolean;
+  show_in_nav: boolean;
+  show_on_homepage: boolean;
+};
+
+type StoreSubcategory = {
+  id: number;
+  category_id: number;
+  name: string;
+  slug: string;
+  image_url: string | null;
+  sort_order: number;
+  active: boolean;
+  show_in_nav: boolean;
+  show_on_homepage: boolean;
+};
+
+type HomepageCategoryCard = {
+  name: string;
+  image: string;
+  href: string;
+  sortKey: number;
+};
+
 export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -44,9 +75,6 @@ export default function Home() {
   const [contactPhone, setContactPhone] = useState("");
   const [contactSubject, setContactSubject] = useState("");
   const [contactMessage, setContactMessage] = useState("");
-  const [contactWebsite, setContactWebsite] = useState("");
-  const contactStartedAtRef = useRef(Date.now());
-
   const [contactLoading, setContactLoading] = useState(false);
   const [contactSuccess, setContactSuccess] = useState("");
   const [contactError, setContactError] = useState("");
@@ -56,6 +84,12 @@ export default function Home() {
 
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
+
+
+  const [storeCategories, setStoreCategories] = useState<StoreCategory[]>([]);
+  const [storeSubcategories, setStoreSubcategories] =
+    useState<StoreSubcategory[]>([]);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
 
   const [siteImages, setSiteImages] = useState<Record<string, string>>({
     hero: "/images/hero.webp",
@@ -94,6 +128,54 @@ export default function Home() {
     }
 
     loadSiteImages();
+  }, []);
+
+  useEffect(() => {
+    async function loadStoreCategories() {
+      const [categoriesResult, subcategoriesResult] =
+        await Promise.all([
+          supabase
+            .from("categories")
+            .select(
+              "id, name, slug, image_url, sort_order, active, show_in_nav, show_on_homepage"
+            )
+            .eq("active", true)
+            .order("sort_order", { ascending: true }),
+
+          supabase
+            .from("subcategories")
+            .select(
+              "id, category_id, name, slug, image_url, sort_order, active, show_in_nav, show_on_homepage"
+            )
+            .eq("active", true)
+            .order("sort_order", { ascending: true }),
+        ]);
+
+      if (categoriesResult.error) {
+        console.error(
+          "Error loading categories:",
+          categoriesResult.error
+        );
+      } else {
+        setStoreCategories(
+          (categoriesResult.data || []) as StoreCategory[]
+        );
+        setCategoriesLoaded(true);
+      }
+
+      if (subcategoriesResult.error) {
+        console.error(
+          "Error loading subcategories:",
+          subcategoriesResult.error
+        );
+      } else {
+        setStoreSubcategories(
+          (subcategoriesResult.data || []) as StoreSubcategory[]
+        );
+      }
+    }
+
+    loadStoreCategories();
   }, []);
 
   useEffect(() => {
@@ -205,65 +287,32 @@ export default function Home() {
       return;
     }
 
-    if (fullName.length < 2 || fullName.length > 100) {
-      setContactError("נא להזין שם מלא תקין.");
-      return;
-    }
-
     if (!/^0\d{8,9}$/.test(phone.replace(/[-\s]/g, ""))) {
       setContactError("נא להזין מספר טלפון תקין.");
-      return;
-    }
-
-    if (message.length > 1500) {
-      setContactError("ההודעה ארוכה מדי. ניתן להזין עד 1,500 תווים.");
       return;
     }
 
     try {
       setContactLoading(true);
 
-      const response = await fetch("/api/contact", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          fullName,
+      const { error } = await supabase
+        .from("contact_messages")
+        .insert({
+          full_name: fullName,
           phone,
           subject,
-          message,
-          website: contactWebsite,
-          startedAt: contactStartedAtRef.current,
-        }),
-      });
+          message: message || null,
+          status: "new",
+        });
 
-      const result = (await response.json().catch(() => null)) as
-        | { ok?: boolean; error?: string }
-        | null;
-
-      if (!response.ok || !result?.ok) {
-        if (response.status === 429) {
-          setContactError(
-            "נשלחו מספר פניות בזמן קצר. נסו שוב בעוד כמה דקות."
-          );
-          return;
-        }
-
-        setContactError(
-          result?.error ||
-            "לא הצלחנו לשלוח את הפרטים כרגע. אפשר לנסות שוב או לפנות אלינו ב-WhatsApp."
-        );
-        return;
+      if (error) {
+        throw error;
       }
 
       setContactName("");
       setContactPhone("");
       setContactSubject("");
       setContactMessage("");
-      setContactWebsite("");
-      contactStartedAtRef.current = Date.now();
-
       setContactSuccess(
         "הפרטים נשלחו בהצלחה. ניצור איתכם קשר בהקדם."
       );
@@ -277,33 +326,359 @@ export default function Home() {
     }
   }
 
-  const categories = [
+  const fallbackHomepageCategories: HomepageCategoryCard[] = [
     {
       name: "פינות אוכל",
       image: siteImages.category_dining,
       href: "/category/tables?sub=dining-tables",
+      sortKey: 10,
     },
     {
       name: "כיסאות וכורסאות",
       image: siteImages.category_armchairs,
       href: "/category/armchairs",
+      sortKey: 20,
     },
     {
       name: "שולחנות סלון",
       image: siteImages.category_coffee,
       href: "/category/tables?sub=coffee-tables",
+      sortKey: 30,
     },
     {
       name: "עיצוב לבית",
       image: siteImages.category_decor,
       href: "/category/decor",
+      sortKey: 40,
     },
     {
       name: "מזרנים",
       image: siteImages.category_mattresses,
       href: "/category/mattresses",
+      sortKey: 50,
     },
   ];
+
+  function fallbackCategoryImage(slug: string) {
+    switch (slug) {
+      case "armchairs":
+        return siteImages.category_armchairs;
+      case "tables":
+        return siteImages.category_dining;
+      case "decor":
+        return siteImages.category_decor;
+      case "mattresses":
+        return siteImages.category_mattresses;
+      default:
+        return "/images/categories/decor.png";
+    }
+  }
+
+  function fallbackSubcategoryImage(
+    slug: string,
+    parentSlug: string
+  ) {
+    if (slug === "dining-tables") {
+      return siteImages.category_dining;
+    }
+
+    if (slug === "coffee-tables") {
+      return siteImages.category_coffee;
+    }
+
+    return fallbackCategoryImage(parentSlug);
+  }
+
+  const dynamicHomepageCategories: HomepageCategoryCard[] = [
+    ...storeCategories
+      .filter((category) => category.show_on_homepage)
+      .map((category) => ({
+        name: category.name,
+        image:
+          category.image_url ||
+          fallbackCategoryImage(category.slug),
+        href: `/category/${category.slug}`,
+        sortKey: category.sort_order * 100,
+      })),
+
+    ...storeSubcategories
+      .filter((subcategory) => subcategory.show_on_homepage)
+      .map((subcategory) => {
+        const parent = storeCategories.find(
+          (category) =>
+            category.id === subcategory.category_id
+        );
+
+        if (!parent) {
+          return null;
+        }
+
+        return {
+          name: subcategory.name,
+          image:
+            subcategory.image_url ||
+            fallbackSubcategoryImage(
+              subcategory.slug,
+              parent.slug
+            ),
+          href: `/category/${parent.slug}?sub=${encodeURIComponent(
+            subcategory.slug
+          )}`,
+          sortKey:
+            parent.sort_order * 100 +
+            subcategory.sort_order,
+        };
+      })
+      .filter(
+        (
+          item
+        ): item is HomepageCategoryCard =>
+          item !== null
+      ),
+  ].sort((a, b) => a.sortKey - b.sortKey);
+
+  const categories =
+    categoriesLoaded
+      ? dynamicHomepageCategories
+      : fallbackHomepageCategories;
+
+  const footerCategories =
+    categoriesLoaded
+      ? storeCategories
+          .filter((category) => category.show_in_nav)
+          .sort(
+            (a, b) =>
+              a.sort_order - b.sort_order
+          )
+      : [];
+
+  const fallbackNavCategories: StoreCategory[] = [
+    {
+      id: -1,
+      name: "כיסאות וכורסאות",
+      slug: "armchairs",
+      image_url: null,
+      sort_order: 1,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: true,
+    },
+    {
+      id: -2,
+      name: "פינות אוכל ושולחנות",
+      slug: "tables",
+      image_url: null,
+      sort_order: 2,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: true,
+    },
+    {
+      id: -3,
+      name: "מזנונים וקונסולות",
+      slug: "storage",
+      image_url: null,
+      sort_order: 3,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: false,
+    },
+    {
+      id: -4,
+      name: "מזרנים",
+      slug: "mattresses",
+      image_url: null,
+      sort_order: 4,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: true,
+    },
+    {
+      id: -5,
+      name: "עיצוב לבית",
+      slug: "decor",
+      image_url: null,
+      sort_order: 5,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: true,
+    },
+  ];
+
+  const fallbackNavSubcategories: StoreSubcategory[] = [
+    {
+      id: -11,
+      category_id: -1,
+      name: "כיסאות אוכל",
+      slug: "dining-chairs",
+      image_url: null,
+      sort_order: 1,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: false,
+    },
+    {
+      id: -12,
+      category_id: -1,
+      name: "כיסאות בר",
+      slug: "bar-chairs",
+      image_url: null,
+      sort_order: 2,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: false,
+    },
+    {
+      id: -13,
+      category_id: -1,
+      name: "כורסאות",
+      slug: "armchairs",
+      image_url: null,
+      sort_order: 3,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: false,
+    },
+    {
+      id: -21,
+      category_id: -2,
+      name: "פינות אוכל",
+      slug: "dining-tables",
+      image_url: null,
+      sort_order: 1,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: true,
+    },
+    {
+      id: -22,
+      category_id: -2,
+      name: "שולחנות סלון",
+      slug: "coffee-tables",
+      image_url: null,
+      sort_order: 2,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: true,
+    },
+    {
+      id: -23,
+      category_id: -2,
+      name: "שולחנות צד",
+      slug: "side-tables",
+      image_url: null,
+      sort_order: 3,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: false,
+    },
+    {
+      id: -41,
+      category_id: -4,
+      name: "יחיד",
+      slug: "single",
+      image_url: null,
+      sort_order: 1,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: false,
+    },
+    {
+      id: -42,
+      category_id: -4,
+      name: "מיטה וחצי",
+      slug: "one-and-half",
+      image_url: null,
+      sort_order: 2,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: false,
+    },
+    {
+      id: -43,
+      category_id: -4,
+      name: "זוגי",
+      slug: "double",
+      image_url: null,
+      sort_order: 3,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: false,
+    },
+    {
+      id: -51,
+      category_id: -5,
+      name: "מראות",
+      slug: "mirrors",
+      image_url: null,
+      sort_order: 1,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: false,
+    },
+    {
+      id: -52,
+      category_id: -5,
+      name: "תאורה",
+      slug: "lighting",
+      image_url: null,
+      sort_order: 2,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: false,
+    },
+    {
+      id: -53,
+      category_id: -5,
+      name: "אקססוריז",
+      slug: "accessories",
+      image_url: null,
+      sort_order: 3,
+      active: true,
+      show_in_nav: true,
+      show_on_homepage: false,
+    },
+  ];
+
+  const effectiveNavCategories = (
+    categoriesLoaded
+      ? storeCategories
+      : fallbackNavCategories
+  )
+    .filter((category) => category.show_in_nav)
+    .sort((a, b) => a.sort_order - b.sort_order);
+
+  const effectiveNavSubcategories =
+    categoriesLoaded
+      ? storeSubcategories
+      : fallbackNavSubcategories;
+
+  const furnitureCategorySlugs = new Set([
+    "armchairs",
+    "tables",
+    "storage",
+  ]);
+
+  const furnitureCategories =
+    effectiveNavCategories.filter((category) =>
+      furnitureCategorySlugs.has(category.slug)
+    );
+
+  const standaloneNavCategories =
+    effectiveNavCategories.filter(
+      (category) =>
+        !furnitureCategorySlugs.has(category.slug)
+    );
+
+  function getNavSubcategories(categoryId: number) {
+    return effectiveNavSubcategories
+      .filter(
+        (subcategory) =>
+          subcategory.category_id === categoryId &&
+          subcategory.show_in_nav
+      )
+      .sort((a, b) => a.sort_order - b.sort_order);
+  }
 
   return (
     <main className="min-h-screen bg-white text-black">
@@ -562,132 +937,153 @@ export default function Home() {
         <nav className="hidden border-b border-gray-200 bg-white md:block">
           <div
             dir="rtl"
-            className="mx-auto flex h-[58px] max-w-7xl items-center justify-center gap-10 px-6"
+            className="mx-auto flex h-[58px] max-w-7xl items-center justify-center gap-8 px-6"
           >
-            <div className="group relative flex h-full items-center">
-              <button
-                type="button"
-                className="flex h-full items-center gap-1 text-[15px] font-medium"
-              >
-                רהיטים
-                <ChevronDown
-                  size={15}
-                  strokeWidth={1.8}
-                  className="transition duration-200 group-hover:rotate-180"
-                />
-              </button>
+            {furnitureCategories.length > 0 && (
+              <div className="group relative flex h-full items-center">
+                <button
+                  type="button"
+                  className="flex h-full items-center gap-1 text-[15px] font-medium"
+                >
+                  רהיטים
+                  <ChevronDown
+                    size={15}
+                    strokeWidth={1.8}
+                    className="transition duration-200 group-hover:rotate-180"
+                  />
+                </button>
 
-              <span className="absolute bottom-0 right-0 h-[2px] w-0 bg-black transition-all duration-300 group-hover:w-full" />
+                <span className="absolute bottom-0 right-0 h-[2px] w-0 bg-black transition-all duration-300 group-hover:w-full" />
 
-              <div className="invisible absolute right-1/2 top-full z-50 w-[760px] translate-x-1/2 translate-y-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
-                <div className="grid grid-cols-2 gap-8 border border-gray-200 bg-white p-7 shadow-xl">
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-5">
-                    <Link href="/category/tables?sub=dining-tables" className="group/item">
-                      <p className="font-semibold">פינות אוכל</p>
-                      <p className="mt-1 text-sm text-gray-500">שולחנות ופינות אוכל</p>
-                    </Link>
+                <div className="invisible absolute right-1/2 top-full z-50 w-[820px] translate-x-1/2 translate-y-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                  <div className="grid grid-cols-[1.15fr_0.85fr] gap-8 border border-gray-200 bg-white p-7 shadow-xl">
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-7">
+                      {furnitureCategories.map((category) => {
+                        const subcategories =
+                          getNavSubcategories(category.id);
 
-                    <Link href="/category/armchairs?sub=dining-chairs" className="group/item">
-                      <p className="font-semibold">כיסאות</p>
-                      <p className="mt-1 text-sm text-gray-500">כיסאות אוכל ובר</p>
-                    </Link>
+                        return (
+                          <div key={category.id}>
+                            <Link
+                              href={`/category/${category.slug}`}
+                              className="font-semibold transition hover:text-gray-500"
+                            >
+                              {category.name}
+                            </Link>
 
-                    <Link href="/category/armchairs?sub=armchairs" className="group/item">
-                      <p className="font-semibold">כורסאות</p>
-                      <p className="mt-1 text-sm text-gray-500">כורסאות לבית</p>
-                    </Link>
+                            {subcategories.length > 0 && (
+                              <div className="mt-3 flex flex-col gap-2 text-sm text-gray-600">
+                                {subcategories.map(
+                                  (subcategory) => (
+                                    <Link
+                                      key={subcategory.id}
+                                      href={`/category/${category.slug}?sub=${encodeURIComponent(
+                                        subcategory.slug
+                                      )}`}
+                                      className="transition hover:text-black"
+                                    >
+                                      {subcategory.name}
+                                    </Link>
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
 
-                    <Link href="/category/tables?sub=coffee-tables" className="group/item">
-                      <p className="font-semibold">שולחנות סלון</p>
-                      <p className="mt-1 text-sm text-gray-500">סלון ושולחנות צד</p>
-                    </Link>
-
-                    <Link href="/category/storage" className="group/item">
-                      <p className="font-semibold">מזנונים וקונסולות</p>
-                      <p className="mt-1 text-sm text-gray-500">אחסון ועיצוב</p>
+                    <Link
+                      href="/custom-sofas"
+                      className="group/card relative min-h-[210px] overflow-hidden"
+                    >
+                      <img
+                        src={siteImages.custom_sofas}
+                        alt="ספות בהתאמה אישית"
+                        width={800}
+                        height={500}
+                        loading="lazy"
+                        decoding="async"
+                        className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover/card:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-black/35" />
+                      <div className="absolute bottom-0 right-0 p-5 text-white">
+                        <p className="text-lg font-semibold">
+                          ספות בהתאמה אישית
+                        </p>
+                        <p className="mt-1 text-sm">
+                          לתכנון הספה שלכם ←
+                        </p>
+                      </div>
                     </Link>
                   </div>
+                </div>
+              </div>
+            )}
 
+            {standaloneNavCategories.map((category) => {
+              const subcategories =
+                getNavSubcategories(category.id);
+
+              if (subcategories.length === 0) {
+                return (
                   <Link
-                    href="/custom-sofas"
-                    className="group/card relative min-h-[190px] overflow-hidden"
+                    key={category.id}
+                    href={`/category/${category.slug}`}
+                    className="group relative flex h-full items-center text-[15px] font-medium"
                   >
-                    <img
-                      src={siteImages.custom_sofas}
-                      alt="ספות בהתאמה אישית"
-                      width={800}
-                      height={500}
-                      loading="lazy"
-                      decoding="async"
-                      className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover/card:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-black/35" />
-                    <div className="absolute bottom-0 right-0 p-5 text-white">
-                      <p className="text-lg font-semibold">ספות בהתאמה אישית</p>
-                      <p className="mt-1 text-sm">לתכנון הספה שלכם ←</p>
-                    </div>
+                    {category.name}
+                    <span className="absolute bottom-0 right-0 h-[2px] w-0 bg-black transition-all duration-300 group-hover:w-full" />
                   </Link>
-                </div>
-              </div>
-            </div>
+                );
+              }
 
-            <Link
-              href="/category/mattresses"
-              className="group relative flex h-full items-center text-[15px] font-medium"
-            >
-              מזרנים
-              <span className="absolute bottom-0 right-0 h-[2px] w-0 bg-black transition-all duration-300 group-hover:w-full" />
-            </Link>
+              return (
+                <div
+                  key={category.id}
+                  className="group relative flex h-full items-center"
+                >
+                  <button
+                    type="button"
+                    className="flex h-full items-center gap-1 text-[15px] font-medium"
+                  >
+                    {category.name}
+                    <ChevronDown
+                      size={15}
+                      strokeWidth={1.8}
+                      className="transition duration-200 group-hover:rotate-180"
+                    />
+                  </button>
 
-            <div className="group relative flex h-full items-center">
-              <button
-                type="button"
-                className="flex h-full items-center gap-1 text-[15px] font-medium"
-              >
-                עיצוב לבית
-                <ChevronDown
-                  size={15}
-                  strokeWidth={1.8}
-                  className="transition duration-200 group-hover:rotate-180"
-                />
-              </button>
+                  <span className="absolute bottom-0 right-0 h-[2px] w-0 bg-black transition-all duration-300 group-hover:w-full" />
 
-              <span className="absolute bottom-0 right-0 h-[2px] w-0 bg-black transition-all duration-300 group-hover:w-full" />
+                  <div className="invisible absolute right-1/2 top-full z-50 min-w-[260px] translate-x-1/2 translate-y-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                    <div className="border border-gray-200 bg-white p-5 shadow-xl">
+                      <Link
+                        href={`/category/${category.slug}`}
+                        className="mb-4 block font-semibold transition hover:text-gray-500"
+                      >
+                        כל {category.name}
+                      </Link>
 
-              <div className="invisible absolute right-1/2 top-full z-50 w-[760px] translate-x-1/2 translate-y-2 opacity-0 transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
-                <div className="grid grid-cols-3 gap-8 border border-gray-200 bg-white p-7 shadow-xl">
-                  <div>
-                    <h3 className="mb-4 font-semibold">מראות</h3>
-                    <div className="flex flex-col gap-3 text-sm text-gray-600">
-                      <Link href="/category/decor?sub=mirrors" className="hover:text-black">מראות קיר</Link>
-                      <Link href="/category/decor?sub=mirrors" className="hover:text-black">מראות עומדות</Link>
-                      <Link href="/category/decor?sub=mirrors" className="hover:text-black">מראות עגולות</Link>
-                      <Link href="/category/decor?sub=mirrors" className="hover:text-black">מראות דקורטיביות</Link>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="mb-4 font-semibold">תאורה</h3>
-                    <div className="flex flex-col gap-3 text-sm text-gray-600">
-                      <Link href="/category/decor?sub=lighting" className="hover:text-black">מנורות שולחן</Link>
-                      <Link href="/category/decor?sub=lighting" className="hover:text-black">מנורות רצפה</Link>
-                      <Link href="/category/decor?sub=lighting" className="hover:text-black">תאורת קיר</Link>
-                      <Link href="/category/decor?sub=lighting" className="hover:text-black">מנורות תלויות</Link>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="mb-4 font-semibold">אקססוריז</h3>
-                    <div className="flex flex-col gap-3 text-sm text-gray-600">
-                      <Link href="/category/decor?sub=accessories" className="hover:text-black">אגרטלים</Link>
-                      <Link href="/category/decor?sub=accessories" className="hover:text-black">פסלים</Link>
-                      <Link href="/category/decor?sub=accessories" className="hover:text-black">נרות ופמוטים</Link>
-                      <Link href="/category/decor?sub=accessories" className="hover:text-black">תמונות וקישוטי קיר</Link>
+                      <div className="flex flex-col gap-3 text-sm text-gray-600">
+                        {subcategories.map((subcategory) => (
+                          <Link
+                            key={subcategory.id}
+                            href={`/category/${category.slug}?sub=${encodeURIComponent(
+                              subcategory.slug
+                            )}`}
+                            className="transition hover:text-black"
+                          >
+                            {subcategory.name}
+                          </Link>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              );
+            })}
 
             <Link
               href="/custom-sofas"
@@ -723,23 +1119,119 @@ export default function Home() {
             className="border-b border-gray-200 bg-white px-6 py-6 md:hidden"
           >
             <div className="flex flex-col gap-5 text-right">
-              <a href="#categories" onClick={() => setMenuOpen(false)}>
-                רהיטים
-              </a>
+              {furnitureCategories.length > 0 && (
+                <details className="group">
+                  <summary className="flex cursor-pointer list-none items-center justify-between font-medium">
+                    <span>רהיטים</span>
+                    <ChevronDown
+                      size={17}
+                      className="transition group-open:rotate-180"
+                    />
+                  </summary>
 
-              <Link href="/category/mattresses" onClick={() => setMenuOpen(false)}>
-                מזרנים
-              </Link>
+                  <div className="mt-4 space-y-5 border-r border-gray-200 pr-4">
+                    {furnitureCategories.map((category) => {
+                      const subcategories =
+                        getNavSubcategories(category.id);
 
-              <Link href="/category/decor" onClick={() => setMenuOpen(false)}>
-                עיצוב לבית
-              </Link>
+                      return (
+                        <div key={category.id}>
+                          <Link
+                            href={`/category/${category.slug}`}
+                            onClick={() => setMenuOpen(false)}
+                            className="font-medium"
+                          >
+                            {category.name}
+                          </Link>
 
-              <Link href="/custom-sofas" onClick={() => setMenuOpen(false)}>
+                          {subcategories.length > 0 && (
+                            <div className="mt-2 flex flex-col gap-2 text-sm text-gray-500">
+                              {subcategories.map(
+                                (subcategory) => (
+                                  <Link
+                                    key={subcategory.id}
+                                    href={`/category/${category.slug}?sub=${encodeURIComponent(
+                                      subcategory.slug
+                                    )}`}
+                                    onClick={() =>
+                                      setMenuOpen(false)
+                                    }
+                                  >
+                                    {subcategory.name}
+                                  </Link>
+                                )
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              )}
+
+              {standaloneNavCategories.map((category) => {
+                const subcategories =
+                  getNavSubcategories(category.id);
+
+                if (subcategories.length === 0) {
+                  return (
+                    <Link
+                      key={category.id}
+                      href={`/category/${category.slug}`}
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      {category.name}
+                    </Link>
+                  );
+                }
+
+                return (
+                  <details key={category.id} className="group">
+                    <summary className="flex cursor-pointer list-none items-center justify-between">
+                      <span>{category.name}</span>
+                      <ChevronDown
+                        size={17}
+                        className="transition group-open:rotate-180"
+                      />
+                    </summary>
+
+                    <div className="mt-3 flex flex-col gap-3 border-r border-gray-200 pr-4 text-sm text-gray-500">
+                      <Link
+                        href={`/category/${category.slug}`}
+                        onClick={() => setMenuOpen(false)}
+                        className="font-medium text-black"
+                      >
+                        כל {category.name}
+                      </Link>
+
+                      {subcategories.map((subcategory) => (
+                        <Link
+                          key={subcategory.id}
+                          href={`/category/${category.slug}?sub=${encodeURIComponent(
+                            subcategory.slug
+                          )}`}
+                          onClick={() => setMenuOpen(false)}
+                        >
+                          {subcategory.name}
+                        </Link>
+                      ))}
+                    </div>
+                  </details>
+                );
+              })}
+
+              <Link
+                href="/custom-sofas"
+                onClick={() => setMenuOpen(false)}
+              >
                 ספות בהתאמה אישית
               </Link>
 
-              <Link href="/new" onClick={() => setMenuOpen(false)}>
+              <Link
+                href="/new"
+                onClick={() => setMenuOpen(false)}
+              >
                 חדש
               </Link>
 
@@ -753,7 +1245,7 @@ export default function Home() {
 
               <div className="mt-2 border-t border-gray-200 pt-5">
                 <div className="flex items-center gap-6">
-<Link
+                  <Link
                     href="/favorites"
                     onClick={() => setMenuOpen(false)}
                     aria-label="מועדפים"
@@ -774,6 +1266,7 @@ export default function Home() {
                     className="relative"
                   >
                     <ShoppingBag size={23} />
+
                     {cartCount > 0 && (
                       <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-black px-1 text-xs text-white">
                         {cartCount}
@@ -1261,26 +1754,6 @@ export default function Home() {
                   className="space-y-5"
                   onSubmit={handleContactSubmit}
                 >
-                  <div
-                    aria-hidden="true"
-                    className="absolute -left-[9999px] h-px w-px overflow-hidden"
-                  >
-                    <label htmlFor="contact-website">
-                      אתר
-                    </label>
-                    <input
-                      id="contact-website"
-                      type="text"
-                      name="website"
-                      tabIndex={-1}
-                      autoComplete="off"
-                      value={contactWebsite}
-                      onChange={(event) =>
-                        setContactWebsite(event.target.value)
-                      }
-                    />
-                  </div>
-
                   <div className="grid gap-5 sm:grid-cols-2">
                     <label className="block">
                       <span className="mb-2 block text-sm font-medium">שם מלא</span>
@@ -1290,7 +1763,6 @@ export default function Home() {
                         onChange={(event) => setContactName(event.target.value)}
                         placeholder="השם שלכם"
                         autoComplete="name"
-                        maxLength={100}
                         required
                         disabled={contactLoading}
                         className="w-full rounded-xl border border-gray-200 bg-neutral-50 px-4 py-3.5 outline-none transition placeholder:text-gray-400 focus:border-black focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
@@ -1306,7 +1778,6 @@ export default function Home() {
                         placeholder="05X-XXXXXXX"
                         autoComplete="tel"
                         inputMode="tel"
-                        maxLength={20}
                         required
                         disabled={contactLoading}
                         className="w-full rounded-xl border border-gray-200 bg-neutral-50 px-4 py-3.5 outline-none transition placeholder:text-gray-400 focus:border-black focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
@@ -1348,7 +1819,6 @@ export default function Home() {
                       value={contactMessage}
                       onChange={(event) => setContactMessage(event.target.value)}
                       placeholder="כתבו לנו בקצרה מה אתם מחפשים..."
-                      maxLength={1500}
                       disabled={contactLoading}
                       className="w-full resize-none rounded-xl border border-gray-200 bg-neutral-50 px-4 py-3.5 outline-none transition placeholder:text-gray-400 focus:border-black focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                     />
@@ -1458,25 +1928,42 @@ export default function Home() {
             </h4>
 
             <div className="flex flex-col gap-3 text-gray-400">
-              <a href="/category/tables">
-                פינות אוכל ושולחנות
-              </a>
+              {categoriesLoaded ? (
+                footerCategories.map((category) => (
+                  <Link
+                    key={category.id}
+                    href={`/category/${category.slug}`}
+                    className="transition hover:text-white"
+                  >
+                    {category.name}
+                  </Link>
+                ))
+              ) : (
+                <>
+                  <Link href="/category/tables">
+                    פינות אוכל ושולחנות
+                  </Link>
 
-              <a href="/category/armchairs">
-                כיסאות וכורסאות
-              </a>
+                  <Link href="/category/armchairs">
+                    כיסאות וכורסאות
+                  </Link>
 
-              <a href="/custom-sofas">
+                  <Link href="/category/decor">
+                    עיצוב הבית
+                  </Link>
+
+                  <Link href="/category/mattresses">
+                    מזרנים
+                  </Link>
+                </>
+              )}
+
+              <Link
+                href="/custom-sofas"
+                className="transition hover:text-white"
+              >
                 ספות בהתאמה אישית
-              </a>
-
-              <a href="/category/decor">
-                עיצוב הבית
-              </a>
-
-              <a href="/category/mattresses">
-                מזרנים
-              </a>
+              </Link>
             </div>
           </div>
 

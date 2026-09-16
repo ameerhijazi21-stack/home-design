@@ -78,6 +78,24 @@ type ProductVariantForm = {
   active: boolean;
 };
 
+
+type CategoryOption = {
+  id: number;
+  name: string;
+  slug: string;
+  sort_order: number;
+  active: boolean;
+};
+
+type SubcategoryOption = {
+  id: number;
+  category_id: number;
+  name: string;
+  slug: string;
+  sort_order: number;
+  active: boolean;
+};
+
 function createEmptyVariant(): ProductVariantForm {
   return {
     tempId: crypto.randomUUID(),
@@ -94,7 +112,7 @@ const emptyForm: ProductForm = {
   name: "",
   slug: "",
   description: "",
-  category: "armchairs",
+  category: "",
   subcategory: "",
   price: "",
   old_price: "",
@@ -107,63 +125,6 @@ const emptyForm: ProductForm = {
   is_new: false,
   active: true,
 };
-
-const categories = [
-  { value: "armchairs", label: "כיסאות וכורסאות" },
-  { value: "tables", label: "פינות אוכל ושולחנות" },
-  { value: "decor", label: "עיצוב לבית" },
-  { value: "mattresses", label: "מזרנים" },
-  { value: "storage", label: "מזנונים וקונסולות" },
-];
-
-const subcategories: Record<
-  string,
-  { value: string; label: string }[]
-> = {
-  armchairs: [
-    { value: "dining-chairs", label: "כיסאות אוכל" },
-    { value: "bar-chairs", label: "כיסאות בר" },
-    { value: "armchairs", label: "כורסאות" },
-  ],
-  tables: [
-    { value: "dining-tables", label: "פינות אוכל ושולחנות אוכל" },
-    { value: "coffee-tables", label: "שולחנות סלון" },
-    { value: "side-tables", label: "שולחנות צד" },
-  ],
-  decor: [
-    { value: "mirrors", label: "מראות" },
-    { value: "lighting", label: "תאורה" },
-    { value: "accessories", label: "אקססוריז" },
-  ],
-  mattresses: [
-    { value: "single", label: "יחיד" },
-    { value: "one-and-half", label: "מיטה וחצי" },
-    { value: "double", label: "זוגי" },
-  ],
-  storage: [],
-};
-
-function getCategoryLabel(category: string) {
-  return (
-    categories.find((item) => item.value === category)?.label ||
-    category
-  );
-}
-
-function getSubcategoryLabel(
-  category: string,
-  subcategory: string | null
-) {
-  if (!subcategory) {
-    return "";
-  }
-
-  return (
-    subcategories[category]?.find(
-      (item) => item.value === subcategory
-    )?.label || subcategory
-  );
-}
 
 function createSlug(value: string) {
   return value
@@ -204,6 +165,13 @@ export default function AdminProductsPage() {
   const [deletingId, setDeletingId] =
     useState<number | null>(null);
 
+  const [categoryOptions, setCategoryOptions] =
+    useState<CategoryOption[]>([]);
+  const [subcategoryOptions, setSubcategoryOptions] =
+    useState<SubcategoryOption[]>([]);
+  const [categoriesLoading, setCategoriesLoading] =
+    useState(true);
+
   useEffect(() => {
     async function initialize() {
       const {
@@ -217,11 +185,116 @@ export default function AdminProductsPage() {
       }
 
       setAuthorized(true);
-      await loadProducts();
+
+      await Promise.all([
+        loadCategoryOptions(),
+        loadProducts(),
+      ]);
     }
 
     initialize();
   }, [router]);
+
+  async function loadCategoryOptions() {
+    setCategoriesLoading(true);
+
+    const [categoriesResult, subcategoriesResult] =
+      await Promise.all([
+        supabase
+          .from("categories")
+          .select("id, name, slug, sort_order, active")
+          .order("sort_order", { ascending: true }),
+        supabase
+          .from("subcategories")
+          .select(
+            "id, category_id, name, slug, sort_order, active"
+          )
+          .order("sort_order", { ascending: true }),
+      ]);
+
+    if (categoriesResult.error) {
+      console.error(
+        "Error loading categories:",
+        categoriesResult.error
+      );
+      setError(
+        `לא ניתן לטעון את הקטגוריות: ${categoriesResult.error.message}`
+      );
+      setCategoriesLoading(false);
+      return;
+    }
+
+    if (subcategoriesResult.error) {
+      console.error(
+        "Error loading subcategories:",
+        subcategoriesResult.error
+      );
+      setError(
+        `לא ניתן לטעון את תתי־הקטגוריות: ${subcategoriesResult.error.message}`
+      );
+      setCategoriesLoading(false);
+      return;
+    }
+
+    setCategoryOptions(
+      (categoriesResult.data || []) as CategoryOption[]
+    );
+    setSubcategoryOptions(
+      (subcategoriesResult.data || []) as SubcategoryOption[]
+    );
+    setCategoriesLoading(false);
+  }
+
+  function getCategoryBySlug(categorySlug: string) {
+    return categoryOptions.find(
+      (category) => category.slug === categorySlug
+    );
+  }
+
+  function getSubcategoriesForCategory(
+    categorySlug: string
+  ) {
+    const category = getCategoryBySlug(categorySlug);
+
+    if (!category) {
+      return [];
+    }
+
+    return subcategoryOptions
+      .filter(
+        (subcategory) =>
+          subcategory.category_id === category.id
+      )
+      .sort(
+        (a, b) =>
+          a.sort_order - b.sort_order
+      );
+  }
+
+  function getCategoryLabel(categorySlug: string) {
+    return (
+      getCategoryBySlug(categorySlug)?.name ||
+      categorySlug
+    );
+  }
+
+  function getSubcategoryLabel(
+    categorySlug: string,
+    subcategorySlug: string | null
+  ) {
+    if (!subcategorySlug) {
+      return "";
+    }
+
+    return (
+      getSubcategoriesForCategory(
+        categorySlug
+      ).find(
+        (subcategory) =>
+          subcategory.slug === subcategorySlug
+      )?.name || subcategorySlug
+    );
+  }
 
   async function loadProducts() {
     setLoading(true);
@@ -269,8 +342,16 @@ export default function AdminProductsPage() {
   }
 
   function openNewProductForm() {
+    const firstActiveCategory =
+      categoryOptions.find(
+        (category) => category.active
+      )?.slug || "";
+
     setEditingProduct(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      category: firstActiveCategory,
+    });
     setVariants([]);
     setOriginalVariantIds([]);
     setShowForm(true);
@@ -651,8 +732,13 @@ export default function AdminProductsPage() {
       return;
     }
 
+    const availableSubcategories =
+      getSubcategoriesForCategory(
+        form.category
+      );
+
     if (
-      (subcategories[form.category]?.length || 0) > 0 &&
+      availableSubcategories.length > 0 &&
       !form.subcategory
     ) {
       setError("יש לבחור תת־קטגוריה.");
@@ -1031,11 +1117,14 @@ export default function AdminProductsPage() {
             <button
               type="button"
               onClick={openNewProductForm}
-              className="flex items-center gap-2 bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800"
+              disabled={categoriesLoading}
+              className="flex items-center gap-2 bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
             >
               <Plus size={18} />
 
-              הוספת מוצר
+              {categoriesLoading
+                ? "טוען קטגוריות..."
+                : "הוספת מוצר"}
             </button>
 
             <button
@@ -1168,13 +1257,16 @@ export default function AdminProductsPage() {
                 כל הקטגוריות
               </option>
 
-              {categories.map(
+              {categoryOptions.map(
                 (category) => (
                   <option
-                    key={category.value}
-                    value={category.value}
+                    key={category.id}
+                    value={category.slug}
                   >
-                    {category.label}
+                    {category.name}
+                    {!category.active
+                      ? " (לא פעיל)"
+                      : ""}
                   </option>
                 )
               )}
@@ -1223,7 +1315,8 @@ export default function AdminProductsPage() {
             <button
               type="button"
               onClick={openNewProductForm}
-              className="mt-6 inline-flex items-center gap-2 bg-black px-6 py-3 text-sm font-medium text-white transition hover:bg-gray-800"
+              disabled={categoriesLoading}
+              className="mt-6 inline-flex items-center gap-2 bg-black px-6 py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
             >
               <Plus size={18} />
 
@@ -1575,13 +1668,25 @@ export default function AdminProductsPage() {
                     }}
                     className="w-full border border-gray-300 bg-white px-4 py-3 outline-none focus:border-black"
                   >
-                    {categories.map(
+                    <option value="">
+                      בחירת קטגוריה
+                    </option>
+
+                    {categoryOptions.map(
                       (category) => (
                         <option
-                          key={category.value}
-                          value={category.value}
+                          key={category.id}
+                          value={category.slug}
+                          disabled={
+                            !category.active &&
+                            form.category !==
+                              category.slug
+                          }
                         >
-                          {category.label}
+                          {category.name}
+                          {!category.active
+                            ? " (לא פעילה)"
+                            : ""}
                         </option>
                       )
                     )}
@@ -1591,12 +1696,16 @@ export default function AdminProductsPage() {
                 <div>
                   <label className="mb-2 block text-sm font-medium">
                     תת־קטגוריה
-                    {(subcategories[form.category]?.length || 0) > 0
+                    {getSubcategoriesForCategory(
+                      form.category
+                    ).length > 0
                       ? " *"
                       : ""}
                   </label>
 
-                  {(subcategories[form.category]?.length || 0) > 0 ? (
+                  {getSubcategoriesForCategory(
+                    form.category
+                  ).length > 0 ? (
                     <select
                       value={form.subcategory}
                       onChange={(event) =>
@@ -1612,13 +1721,23 @@ export default function AdminProductsPage() {
                         בחירת תת־קטגוריה
                       </option>
 
-                      {subcategories[form.category].map(
+                      {getSubcategoriesForCategory(
+                        form.category
+                      ).map(
                         (subcategory) => (
                           <option
-                            key={subcategory.value}
-                            value={subcategory.value}
+                            key={subcategory.id}
+                            value={subcategory.slug}
+                            disabled={
+                              !subcategory.active &&
+                              form.subcategory !==
+                                subcategory.slug
+                            }
                           >
-                            {subcategory.label}
+                            {subcategory.name}
+                            {!subcategory.active
+                              ? " (לא פעילה)"
+                              : ""}
                           </option>
                         )
                       )}
