@@ -535,7 +535,7 @@ export default function CheckoutPage() {
     );
 
     if (createOrderError) {
-      console.error(
+      console.warn(
         "Error creating order with stock:",
         createOrderError
       );
