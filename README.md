@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Home Design
 
-## Getting Started
+A responsive furniture and home decor storefront built for a local business in Tamra, Israel. The application brings together a customer storefront, checkout, and an admin dashboard for managing products, orders, and delivery areas.
 
-First, run the development server:
+**Live site:** [Home Design](https://home-design-pi-hazel.vercel.app)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## What I built
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Product catalog with categories, product pages, image galleries, variants, sale prices, and stock availability.
+- Shopping cart and checkout with delivery or in-store pickup. Delivery fees are calculated by city and shipping region.
+- PostgreSQL order function that validates products, prices, delivery fees, and stock on the server, then creates the order and updates inventory in one transaction.
+- Inventory restoration when an order is cancelled, including products with variants.
+- Admin tools to manage products, orders, order status, and delivery regions.
+- Contact form and email notifications for new inquiries and orders.
+- Responsive Hebrew, right-to-left interface.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Frontend:** Next.js App Router, React, TypeScript, Tailwind CSS  
+**Backend and database:** Supabase, PostgreSQL, Row Level Security  
+**Email and hosting:** Resend, Vercel
 
-## Learn More
+## Current status
 
-To learn more about Next.js, take a look at the following resources:
+The storefront accepts orders, but **online card payment is not connected yet**. Placing an order does not charge the customer. Online payment integration and the site's terms are planned before the full public launch.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Running locally
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Install dependencies with `npm install`.
+2. Configure your own Supabase project and the server environment variables needed for notifications. The application requires the corresponding tables, policies, SQL functions, and triggers in Supabase.
+3. Create `.env.local` with your own configuration. Do not commit this file or any credentials.
+4. Run `npm run dev` and open [http://localhost:3000](http://localhost:3000).
 
-## Deploy on Vercel
+## Author
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Built by Ameer Hijazi, Software Engineering student.
